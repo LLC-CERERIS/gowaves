@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"runtime"
 
+	"github.com/go-redis/redis/v8"
+
 	"github.com/wavesplatform/gowaves/pkg/crypto"
 	"github.com/wavesplatform/gowaves/pkg/keyvalue"
 	"github.com/wavesplatform/gowaves/pkg/libs/ntptime"
@@ -196,8 +198,8 @@ type State interface {
 // and state will try to sync and use it in this case.
 // params are state parameters (see below).
 // settings are blockchain settings (settings.MainNetSettings, settings.TestNetSettings or custom settings).
-func NewState(dataDir string, params StateParams, settings *settings.BlockchainSettings) (State, error) {
-	s, err := newStateManager(dataDir, params, settings)
+func NewState(dataDir string, params StateParams, settings *settings.BlockchainSettings, redisClient *redis.Client) (State, error) {
+	s, err := newStateManager(dataDir, params, settings, redisClient)
 	if err != nil {
 		return nil, err
 	}

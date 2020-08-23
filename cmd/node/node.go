@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"math/rand"
 	"net/http"
 	_ "net/http"
@@ -14,7 +15,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/mr-tron/base58"
+	"go.uber.org/zap"
+
 	"github.com/wavesplatform/gowaves/pkg/api"
 	"github.com/wavesplatform/gowaves/pkg/crypto"
 	"github.com/wavesplatform/gowaves/pkg/grpc/server"
@@ -38,7 +42,6 @@ import (
 	"github.com/wavesplatform/gowaves/pkg/types"
 	"github.com/wavesplatform/gowaves/pkg/util/common"
 	"github.com/wavesplatform/gowaves/pkg/wallet"
-	"go.uber.org/zap"
 )
 
 var version = proto.Version{Major: 1, Minor: 2, Patch: 3}
@@ -76,6 +79,9 @@ var (
 	integrationMinAssetInfoUpdateInterval = flag.Int("integration.min-asset-info-update-interval", 100000, "Minimum asset info update interval for integration tests.")
 	metricsID                             = flag.Int("metrics-id", -1, "ID of the node on the metrics collection system")
 	metricsURL                            = flag.String("metrics-url", "", "URL of InfluxDB or Telegraf in form of 'http://username:password@host:port/db'")
+	redisHost                             = flag.String("redis-host", "localhost:6379", "Address for Redis")
+	redisPassword                         = flag.String("redis-password", "", "Redis password")
+	redisDb                               = flag.Int("redis-db", 0, "Redis db")
 )
 
 var defaultPeers = map[string]string{
@@ -112,6 +118,9 @@ func debugCommandLineParameters() {
 	zap.S().Debugf("wallet-password: %s", *walletPassword)
 	zap.S().Debugf("limit-connections: %s", *limitConnectionsS)
 	zap.S().Debugf("profiler: %v", *profiler)
+
+	zap.S().Debugf("redis-host: %v", *redisHost)
+	zap.S().Debugf("redis-db: %v", *redisDb)
 }
 
 func main() {
@@ -223,12 +232,23 @@ func main() {
 		return
 	}
 
+	redis := redis.NewClient(&redis.Options{
+		Addr:     *redisHost,
+		Password: *redisPassword,
+		DB:       *redisDb,
+	})
+	if redis == nil {
+		zap.S().Error(fmt.Errorf("can't init redis"))
+		cancel()
+		return
+	}
+
 	params := state.DefaultStateParams()
 	params.StoreExtendedApiData = *buildExtendedApi
 	params.ProvideExtendedApi = *serveExtendedApi
 	params.BuildStateHashes = *buildStateHashes
 	params.Time = ntptm
-	state, err := state.NewState(path, params, cfg)
+	state, err := state.NewState(path, params, cfg, redis)
 	if err != nil {
 		zap.S().Error(err)
 		cancel()
@@ -311,6 +331,7 @@ func main() {
 		MicroBlockCache: microblock_cache.NewMicroblockCache(),
 		InternalChannel: messages.NewInternalChannel(),
 		MinPeersMining:  *minPeersMining,
+		Redis:           redis,
 	}
 
 	mine := miner.NewMicroblockMiner(services, features, reward)

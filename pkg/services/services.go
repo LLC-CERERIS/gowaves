@@ -7,6 +7,8 @@ import (
 	"github.com/wavesplatform/gowaves/pkg/proto"
 	"github.com/wavesplatform/gowaves/pkg/state"
 	"github.com/wavesplatform/gowaves/pkg/types"
+
+	"github.com/go-redis/redis/v8"
 )
 
 type BlocksApplier interface {
@@ -37,4 +39,5 @@ type Services struct {
 	MicroBlockCache MicroBlockCache
 	InternalChannel chan messages.InternalMessage
 	MinPeersMining  int
+	Redis           *redis.Client
 }

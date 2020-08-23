@@ -1,13 +1,17 @@
 package state
 
 import (
+	"context"
+
+	"github.com/go-redis/redis/v8"
 	"github.com/mr-tron/base58/base58"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
+
 	"github.com/wavesplatform/gowaves/pkg/errs"
 	"github.com/wavesplatform/gowaves/pkg/proto"
 	"github.com/wavesplatform/gowaves/pkg/settings"
 	"github.com/wavesplatform/gowaves/pkg/types"
-	"go.uber.org/zap"
 )
 
 type txAppender struct {
@@ -43,6 +47,8 @@ type txAppender struct {
 	// buildApiData flag indicates that additional data for API is built when
 	// appending transactions.
 	buildApiData bool
+
+	redisClient *redis.Client
 }
 
 func newTxAppender(
@@ -52,6 +58,7 @@ func newTxAppender(
 	settings *settings.BlockchainSettings,
 	stateDB *stateDB,
 	atx *addressTransactions,
+	redisClient *redis.Client,
 ) (*txAppender, error) {
 	sc, err := newScriptCaller(state, stor, settings)
 	if err != nil {
@@ -98,6 +105,7 @@ func newTxAppender(
 		diffStorInvoke: diffStorInvoke,
 		diffApplier:    diffApplier,
 		buildApiData:   buildApiData,
+		redisClient:    redisClient,
 	}, nil
 }
 
@@ -459,6 +467,13 @@ func (a *txAppender) appendTx(tx proto.Transaction, params *appendTxParams) erro
 			return errs.Extend(err, "save transaction id by addresses")
 		}
 	}
+
+	for address, _ := range applicationRes.changes.addrs {
+		if err := a.redisClient.Set(context.Background(), address.String(), true, 0).Err(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -521,6 +536,11 @@ func (a *txAppender) appendBlock(params *appendBlockParams) error {
 	if err := a.blockDiffer.saveCurFeeDistr(params.block); err != nil {
 		return err
 	}
+
+	if err := a.redisClient.Set(context.Background(), blockInfo.Generator.String(), true, 0).Err(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

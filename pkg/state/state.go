@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
 	"github.com/wavesplatform/gowaves/pkg/consensus"
@@ -354,7 +355,7 @@ type stateManager struct {
 	newBlocks *newBlocks
 }
 
-func newStateManager(dataDir string, params StateParams, settings *settings.BlockchainSettings) (*stateManager, error) {
+func newStateManager(dataDir string, params StateParams, settings *settings.BlockchainSettings, redisClient *redis.Client) (*stateManager, error) {
 	err := validateSettings(settings)
 	if err != nil {
 		return nil, err
@@ -439,7 +440,7 @@ func newStateManager(dataDir string, params StateParams, settings *settings.Bloc
 	}
 	// Set fields which depend on state.
 	// Consensus validator is needed to check block headers.
-	appender, err := newTxAppender(state, rw, stor, settings, stateDB, atx)
+	appender, err := newTxAppender(state, rw, stor, settings, stateDB, atx, redisClient)
 	if err != nil {
 		return nil, wrapErr(Other, err)
 	}

@@ -468,10 +468,13 @@ func (a *txAppender) appendTx(tx proto.Transaction, params *appendTxParams) erro
 		}
 	}
 
+	var addresses []interface{}
 	for address, _ := range applicationRes.changes.addrs {
-		if err := a.redisClient.Set(context.Background(), address.String(), true, 0).Err(); err != nil {
-			return err
-		}
+		addresses = append(addresses, address.String(), true)
+	}
+
+	if err := a.redisClient.MSet(context.Background(), addresses...).Err(); err != nil {
+		return err
 	}
 
 	return nil
